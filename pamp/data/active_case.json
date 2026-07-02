@@ -1,0 +1,775 @@
+{
+  "target": "88.119.176.157",
+  "target_type": "ip",
+  "last_action": "ip_analysis",
+  "case_path": "C:\\Users\\Admin\\Desktop\\pentest\\output",
+  "case_file": "C:\\Users\\Admin\\Desktop\\pentest\\pamp\\data\\cases\\2026-07-02T224617Z_ip_88.119.176.157.json",
+  "report_path": "C:\\Users\\Admin\\Desktop\\pentest\\output\\report.html",
+  "debug_path": "C:\\Users\\Admin\\Desktop\\pentest\\output\\debug.log",
+  "language": "ru",
+  "started_at": "2026-07-02T22:45:46+00:00",
+  "last_analysis": "ip: 88.119.176.157",
+  "current_domain": "",
+  "active_domain": "",
+  "domain_data": {},
+  "current_ip": "88.119.176.157",
+  "ip_data": {
+    "ip": "88.119.176.157",
+    "version": 4,
+    "is_private": false,
+    "country": "Lithuania",
+    "country_code": "LT",
+    "region": "Vilnius",
+    "region_name": "Vilnius",
+    "city": "Vilnius",
+    "latitude": 54.6876,
+    "longitude": 25.2806,
+    "timezone": "Europe/Vilnius",
+    "asn": "AS198651",
+    "as_label": "AS198651 HOSTLINE, UAB",
+    "as_name": "HOSTLINE",
+    "organization": "HOSTLINE",
+    "isp": "HOSTLINE, UAB",
+    "provider": "HOSTLINE, UAB",
+    "reverse_dns": "88-119-176-157.hostline.lt",
+    "hosting_datacenter": true,
+    "hosting_or_datacenter": true,
+    "hosting_signals": [
+      "ip-api hosting flag"
+    ],
+    "vpn_proxy_tor": false,
+    "vpn_proxy_tor_signals": [],
+    "risk_flags": [
+      "hosting_or_datacenter",
+      "reverse_dns_mismatch"
+    ],
+    "rdap": {
+      "handle": "88.119.176.0 - 88.119.177.255",
+      "name": "HOSTLINE",
+      "type": "ASSIGNED PA",
+      "country": "LT",
+      "start_address": "88.119.176.0",
+      "end_address": "88.119.177.255",
+      "parent_handle": "88.119.176.0 - 88.119.255.255",
+      "port43": "whois.ripe.net",
+      "network_type": "ASSIGNED PA",
+      "abuse_contacts": [
+        "abuse@telia.lt"
+      ],
+      "cidrs": [
+        {
+          "version": 4,
+          "prefix": "88.119.176.0",
+          "length": 23
+        }
+      ],
+      "events": [
+        {
+          "action": "registration",
+          "date": "2016-03-08T06:20:34Z"
+        },
+        {
+          "action": "last changed",
+          "date": "2016-03-08T06:20:34Z"
+        }
+      ],
+      "notices": [
+        "Filtered",
+        "Whois Inaccuracy Reporting",
+        "Source",
+        "Terms and Conditions"
+      ],
+      "asn": ""
+    },
+    "port_surface": {
+      "scanner": "nmap",
+      "profile": "service-light-top-1000",
+      "target": "88.119.176.157",
+      "ip": "88.119.176.157",
+      "status": "completed",
+      "command": [
+        "nmap",
+        "-sV",
+        "--version-light",
+        "-T3",
+        "--top-ports",
+        "1000",
+        "--open",
+        "--max-retries",
+        "2",
+        "--host-timeout",
+        "4m",
+        "-oX",
+        "-",
+        "88.119.176.157"
+      ],
+      "executable": "C:\\Program Files (x86)\\Nmap\\nmap.EXE",
+      "exit_code": 0,
+      "stderr": "",
+      "reason": "",
+      "xml_bytes": 9714,
+      "xml_parsed": true,
+      "open_ports": [
+        {
+          "port": 21,
+          "protocol": "tcp",
+          "state": "open",
+          "service": "tcpwrapped",
+          "product": "",
+          "version": "",
+          "extra_info": "",
+          "tunnel": "",
+          "cpe": [],
+          "sensitive": true,
+          "risk": "warning",
+          "risk_label": "FTP",
+          "risk_reason": "File transfer service is reachable from the Internet."
+        },
+        {
+          "port": 53,
+          "protocol": "tcp",
+          "state": "open",
+          "service": "tcpwrapped",
+          "product": "",
+          "version": "",
+          "extra_info": "",
+          "tunnel": "",
+          "cpe": [],
+          "sensitive": false,
+          "risk": "info",
+          "risk_label": "",
+          "risk_reason": ""
+        },
+        {
+          "port": 135,
+          "protocol": "tcp",
+          "state": "open",
+          "service": "tcpwrapped",
+          "product": "",
+          "version": "",
+          "extra_info": "",
+          "tunnel": "",
+          "cpe": [],
+          "sensitive": true,
+          "risk": "warning",
+          "risk_label": "RPC",
+          "risk_reason": "Windows RPC service is reachable from the Internet."
+        }
+      ],
+      "summary": {
+        "open_ports": 3,
+        "services_identified": 3,
+        "sensitive_services": 2,
+        "web_services": 0,
+        "non_web_services": 3,
+        "service_names": [
+          "tcpwrapped"
+        ],
+        "scan_timed_out": false
+      },
+      "scan_metadata": {
+        "hosts_timed_out": 0,
+        "hosts_up": 1,
+        "hosts_down": 0,
+        "hosts_total": 1,
+        "finished_exit": "success",
+        "elapsed_seconds": "17.57",
+        "nmap_summary": "Nmap done at Fri Jul  3 01:46:06 2026; 1 IP address (1 host up) scanned in 17.57 seconds"
+      },
+      "skip_reason": "",
+      "errors": [],
+      "started_at": "2026-07-02T22:45:48Z",
+      "completed_at": "2026-07-02T22:46:06Z",
+      "duration_ms": 17626
+    },
+    "ip_intelligence": {
+      "status": "completed",
+      "summary": {
+        "ip": "88.119.176.157",
+        "country": "Lithuania",
+        "country_code": "LT",
+        "region": "Vilnius",
+        "city": "Vilnius",
+        "asn": "AS198651",
+        "as_name": "HOSTLINE",
+        "organization": "HOSTLINE",
+        "hosting_provider": "HOSTLINE, UAB",
+        "cloud_provider": "",
+        "reverse_dns": "88-119-176-157.hostline.lt",
+        "detected_services": 3,
+        "open_ports": 3,
+        "detected_technologies": 0,
+        "last_scan": "2026-07-02T22:45:46+00:00",
+        "scan_duration_ms": 31027,
+        "infrastructure_role": "DNS",
+        "risk_signals": 1
+      },
+      "geo": {
+        "country": "Lithuania",
+        "country_code": "LT",
+        "region": "Vilnius",
+        "region_code": "VL",
+        "city": "Vilnius",
+        "postal_code": "02007",
+        "latitude": 54.6876,
+        "longitude": 25.2806,
+        "timezone": "Europe/Vilnius",
+        "utc_offset_seconds": 10800,
+        "currency": "EUR",
+        "internet_registry": "RIPE NCC",
+        "network_region": "LT"
+      },
+      "asn": {
+        "number": "AS198651",
+        "name": "HOSTLINE",
+        "label": "AS198651 HOSTLINE, UAB",
+        "organization": "HOSTLINE"
+      },
+      "provider": {
+        "organization": "HOSTLINE",
+        "provider": "HOSTLINE, UAB",
+        "isp": "HOSTLINE, UAB",
+        "hosting": true,
+        "mobile_network": false,
+        "cloud": false,
+        "cloud_provider": "",
+        "cloud_evidence": [],
+        "cdn": false,
+        "cdn_provider": "",
+        "cdn_evidence": [],
+        "waf": false,
+        "waf_provider": "",
+        "waf_evidence": [],
+        "reverse_dns": "88-119-176-157.hostline.lt",
+        "abuse_contacts": [
+          "abuse@telia.lt"
+        ]
+      },
+      "registry": {
+        "registry": "RIPE NCC",
+        "handle": "88.119.176.0 - 88.119.177.255",
+        "name": "HOSTLINE",
+        "type": "ASSIGNED PA",
+        "country": "LT",
+        "start_address": "88.119.176.0",
+        "end_address": "88.119.177.255",
+        "parent_handle": "88.119.176.0 - 88.119.255.255",
+        "cidrs": [
+          {
+            "version": 4,
+            "prefix": "88.119.176.0",
+            "length": 23
+          }
+        ],
+        "events": [
+          {
+            "action": "registration",
+            "date": "2016-03-08T06:20:34Z"
+          },
+          {
+            "action": "last changed",
+            "date": "2016-03-08T06:20:34Z"
+          }
+        ],
+        "abuse_contacts": [
+          "abuse@telia.lt"
+        ],
+        "notices": [
+          "Filtered",
+          "Whois Inaccuracy Reporting",
+          "Source",
+          "Terms and Conditions"
+        ]
+      },
+      "classification": {
+        "primary_role": "DNS",
+        "roles": [
+          {
+            "role": "DNS",
+            "confidence": "high",
+            "evidence": "Port 53 is open"
+          }
+        ],
+        "is_likely_edge": false,
+        "origin_asserted": false
+      },
+      "services": [
+        {
+          "name": "FTP",
+          "icon": "FTP",
+          "port": 21,
+          "protocol": "tcp",
+          "version": "",
+          "description": "File transfer service",
+          "risk_hint": "File transfer service is reachable from the Internet."
+        },
+        {
+          "name": "DNS",
+          "icon": "DNS",
+          "port": 53,
+          "protocol": "tcp",
+          "version": "",
+          "description": "Domain name service",
+          "risk_hint": ""
+        },
+        {
+          "name": "tcpwrapped",
+          "icon": "SRV",
+          "port": 135,
+          "protocol": "tcp",
+          "version": "",
+          "description": "Network service identified by Nmap",
+          "risk_hint": "Windows RPC service is reachable from the Internet."
+        }
+      ],
+      "ports": [
+        {
+          "port": 21,
+          "state": "open",
+          "protocol": "tcp",
+          "service": "tcpwrapped",
+          "product": "",
+          "version": "",
+          "extra_info": "",
+          "cpe": [],
+          "risk": "warning",
+          "risk_hint": "File transfer service is reachable from the Internet."
+        },
+        {
+          "port": 53,
+          "state": "open",
+          "protocol": "tcp",
+          "service": "tcpwrapped",
+          "product": "",
+          "version": "",
+          "extra_info": "",
+          "cpe": [],
+          "risk": "info",
+          "risk_hint": ""
+        },
+        {
+          "port": 135,
+          "state": "open",
+          "protocol": "tcp",
+          "service": "tcpwrapped",
+          "product": "",
+          "version": "",
+          "extra_info": "",
+          "cpe": [],
+          "risk": "warning",
+          "risk_hint": "Windows RPC service is reachable from the Internet."
+        }
+      ],
+      "technologies": [],
+      "relationships": {
+        "ip": "88.119.176.157",
+        "domains": [
+          "88-119-176-157.hostline.lt"
+        ],
+        "subdomains": [
+          "88-119-176-157.hostline.lt"
+        ],
+        "certificates": [],
+        "routes": [],
+        "open_ports": [
+          21,
+          53,
+          135
+        ],
+        "services": [
+          "FTP",
+          "DNS",
+          "tcpwrapped"
+        ],
+        "technologies": [],
+        "findings": [
+          "Reverse DNS Mismatch"
+        ],
+        "network_range": "88.119.176.0/23"
+      },
+      "blueprint": {
+        "status": "completed",
+        "summary": {
+          "nodes": 6,
+          "edges": 7
+        },
+        "nodes": [
+          {
+            "id": "ip:88.119.176.157",
+            "type": "ip",
+            "label": "88.119.176.157",
+            "risk": "info"
+          },
+          {
+            "id": "asn:as198651",
+            "type": "asn",
+            "label": "AS198651",
+            "risk": "info"
+          },
+          {
+            "id": "provider:hostline-uab",
+            "type": "provider",
+            "label": "HOSTLINE, UAB",
+            "risk": "info"
+          },
+          {
+            "id": "open_ports:88-119-176-157",
+            "type": "open_ports",
+            "label": "Open Ports (3)",
+            "risk": "medium",
+            "items": [
+              "21",
+              "53",
+              "135"
+            ]
+          },
+          {
+            "id": "services:88-119-176-157",
+            "type": "services",
+            "label": "Services (3)",
+            "risk": "info",
+            "items": [
+              "FTP",
+              "DNS",
+              "tcpwrapped"
+            ]
+          },
+          {
+            "id": "findings:88-119-176-157",
+            "type": "findings",
+            "label": "Findings (1)",
+            "risk": "medium",
+            "items": [
+              "Reverse DNS Mismatch"
+            ]
+          }
+        ],
+        "edges": [
+          {
+            "from": "ip:88.119.176.157",
+            "to": "asn:as198651",
+            "type": "announced_by"
+          },
+          {
+            "from": "asn:as198651",
+            "to": "provider:hostline-uab",
+            "type": "operated_by"
+          },
+          {
+            "from": "provider:hostline-uab",
+            "to": "open_ports:88-119-176-157",
+            "type": "exposes"
+          },
+          {
+            "from": "provider:hostline-uab",
+            "to": "services:88-119-176-157",
+            "type": "serves"
+          },
+          {
+            "from": "provider:hostline-uab",
+            "to": "findings:88-119-176-157",
+            "type": "has_signal"
+          },
+          {
+            "from": "open_ports:88-119-176-157",
+            "to": "services:88-119-176-157",
+            "type": "relates_to"
+          },
+          {
+            "from": "services:88-119-176-157",
+            "to": "findings:88-119-176-157",
+            "type": "relates_to"
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "stage": "IP validation",
+          "status": "completed",
+          "detail": "Input parsed as IPv4",
+          "time": "2026-07-02T22:45:46+00:00",
+          "duration_ms": null
+        },
+        {
+          "stage": "Geolocation",
+          "status": "completed",
+          "detail": "Lithuania",
+          "time": "2026-07-02T22:45:46+00:00",
+          "duration_ms": null
+        },
+        {
+          "stage": "Registry and ASN",
+          "status": "completed",
+          "detail": "88.119.176.0 - 88.119.177.255",
+          "time": "2026-07-02T22:45:48+00:00",
+          "duration_ms": null
+        },
+        {
+          "stage": "Reverse DNS",
+          "status": "completed",
+          "detail": "88-119-176-157.hostline.lt",
+          "time": "2026-07-02T22:45:48+00:00",
+          "duration_ms": null
+        },
+        {
+          "stage": "Nmap ports",
+          "status": "completed",
+          "detail": "3 open port(s)",
+          "time": "2026-07-02T22:46:06+00:00",
+          "duration_ms": 17626
+        },
+        {
+          "stage": "HTTP services",
+          "status": "not_found",
+          "detail": "0 HTTP observation(s)",
+          "time": "2026-07-02T22:46:06+00:00",
+          "duration_ms": null
+        },
+        {
+          "stage": "TLS services",
+          "status": "not_found",
+          "detail": "0 TLS observation(s)",
+          "time": "2026-07-02T22:46:06+00:00",
+          "duration_ms": null
+        },
+        {
+          "stage": "Risk signals",
+          "status": "completed",
+          "detail": "1 analytical signal(s)",
+          "time": "2026-07-02T22:46:17+00:00",
+          "duration_ms": null
+        },
+        {
+          "stage": "IP report model",
+          "status": "completed",
+          "detail": "Infrastructure intelligence normalized",
+          "time": "2026-07-02T22:46:17+00:00",
+          "duration_ms": 31027
+        }
+      ],
+      "risk_signals": [
+        {
+          "id": "ip-risk:reverse-dns-mismatch",
+          "type": "reverse_dns_mismatch",
+          "title": "Reverse DNS Mismatch",
+          "risk": "low",
+          "confidence": "medium",
+          "detail": "The PTR hostname did not resolve back to the analyzed IP during verification.",
+          "evidence": "88-119-176-157.hostline.lt",
+          "source": "DNS",
+          "confirmed": false
+        }
+      ],
+      "evidence": [
+        {
+          "title": "Geolocation",
+          "source": "ip-api.com",
+          "category": "geo",
+          "evidence": {
+            "country": "Lithuania",
+            "countryCode": "LT",
+            "regionName": "Vilnius",
+            "city": "Vilnius",
+            "lat": 54.6876,
+            "lon": 25.2806
+          }
+        },
+        {
+          "title": "Network allocation",
+          "source": "RDAP",
+          "category": "registry",
+          "evidence": {
+            "handle": "88.119.176.0 - 88.119.177.255",
+            "name": "HOSTLINE",
+            "start_address": "88.119.176.0",
+            "end_address": "88.119.177.255",
+            "port43": "whois.ripe.net"
+          }
+        },
+        {
+          "title": "Reverse DNS",
+          "source": "DNS",
+          "category": "dns",
+          "evidence": "88-119-176-157.hostline.lt"
+        },
+        {
+          "title": "Port scan",
+          "source": "Nmap",
+          "category": "ports",
+          "evidence": {
+            "status": "completed",
+            "profile": "service-light-top-1000",
+            "summary": {
+              "open_ports": 3,
+              "services_identified": 3,
+              "sensitive_services": 2,
+              "web_services": 0,
+              "non_web_services": 3,
+              "service_names": [
+                "tcpwrapped"
+              ],
+              "scan_timed_out": false
+            }
+          }
+        },
+        {
+          "title": "Reverse DNS Mismatch",
+          "source": "DNS",
+          "category": "risk",
+          "evidence": "88-119-176-157.hostline.lt"
+        }
+      ],
+      "insights": [
+        {
+          "title": "Infrastructure role: DNS",
+          "risk": "info",
+          "confidence": "high",
+          "detail": "Port 53 is open"
+        },
+        {
+          "title": "Public service surface identified",
+          "risk": "medium",
+          "confidence": "high",
+          "detail": "3 open port(s) and 1 service type(s)."
+        }
+      ],
+      "http_observations": [],
+      "tls_observations": [],
+      "scan": {
+        "scanner": "nmap",
+        "profile": "service-light-top-1000",
+        "target": "88.119.176.157",
+        "ip": "88.119.176.157",
+        "status": "completed",
+        "command": [
+          "nmap",
+          "-sV",
+          "--version-light",
+          "-T3",
+          "--top-ports",
+          "1000",
+          "--open",
+          "--max-retries",
+          "2",
+          "--host-timeout",
+          "4m",
+          "-oX",
+          "-",
+          "88.119.176.157"
+        ],
+        "executable": "C:\\Program Files (x86)\\Nmap\\nmap.EXE",
+        "exit_code": 0,
+        "stderr": "",
+        "reason": "",
+        "xml_bytes": 9714,
+        "xml_parsed": true,
+        "open_ports": [
+          {
+            "port": 21,
+            "protocol": "tcp",
+            "state": "open",
+            "service": "tcpwrapped",
+            "product": "",
+            "version": "",
+            "extra_info": "",
+            "tunnel": "",
+            "cpe": [],
+            "sensitive": true,
+            "risk": "warning",
+            "risk_label": "FTP",
+            "risk_reason": "File transfer service is reachable from the Internet."
+          },
+          {
+            "port": 53,
+            "protocol": "tcp",
+            "state": "open",
+            "service": "tcpwrapped",
+            "product": "",
+            "version": "",
+            "extra_info": "",
+            "tunnel": "",
+            "cpe": [],
+            "sensitive": false,
+            "risk": "info",
+            "risk_label": "",
+            "risk_reason": ""
+          },
+          {
+            "port": 135,
+            "protocol": "tcp",
+            "state": "open",
+            "service": "tcpwrapped",
+            "product": "",
+            "version": "",
+            "extra_info": "",
+            "tunnel": "",
+            "cpe": [],
+            "sensitive": true,
+            "risk": "warning",
+            "risk_label": "RPC",
+            "risk_reason": "Windows RPC service is reachable from the Internet."
+          }
+        ],
+        "summary": {
+          "open_ports": 3,
+          "services_identified": 3,
+          "sensitive_services": 2,
+          "web_services": 0,
+          "non_web_services": 3,
+          "service_names": [
+            "tcpwrapped"
+          ],
+          "scan_timed_out": false
+        },
+        "scan_metadata": {
+          "hosts_timed_out": 0,
+          "hosts_up": 1,
+          "hosts_down": 0,
+          "hosts_total": 1,
+          "finished_exit": "success",
+          "elapsed_seconds": "17.57",
+          "nmap_summary": "Nmap done at Fri Jul  3 01:46:06 2026; 1 IP address (1 host up) scanned in 17.57 seconds"
+        },
+        "skip_reason": "",
+        "errors": [],
+        "started_at": "2026-07-02T22:45:48Z",
+        "completed_at": "2026-07-02T22:46:06Z",
+        "duration_ms": 17626
+      }
+    },
+    "reputation": {
+      "status": "not_scored",
+      "reason": "No keyless public reputation source configured"
+    },
+    "source": "ip-api.com, rdap.org, reverse_dns, torproject.org, nmap",
+    "sources": [
+      "ip-api.com",
+      "rdap.org",
+      "reverse_dns",
+      "torproject.org",
+      "nmap"
+    ],
+    "checked_at": "2026-07-02T22:45:46+00:00",
+    "duration_ms": 31027,
+    "errors": []
+  },
+  "current_findings": [],
+  "current_artifacts": [
+    {
+      "type": "ip",
+      "label": "88.119.176.157",
+      "id": "742b91d5d0b042f7830287830db67963"
+    }
+  ],
+  "current_domain_data": {},
+  "current_report_data": {},
+  "decoded_artifacts": [],
+  "trackers": [],
+  "technologies": [],
+  "security_findings": [],
+  "sensitive_files": [],
+  "network_requests": [],
+  "emails": [],
+  "phones": [],
+  "endpoints": []
+}
