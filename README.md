@@ -144,6 +144,122 @@ No paid APIs are required.
 
 ---
 
+## Screenshots
+
+### Menu
+
+![Menu](docs/screenshots/menu.png)
+
+Main CLI interface with available analysis modules, language selection, and quick access to the current workspace.
+
+---
+
+### Search
+
+![Search](docs/screenshots/search_1.png)
+
+Target initialization and reconnaissance workflow for a new analysis session.
+
+![Search](docs/screenshots/search_2.png)
+
+Live progress view showing module execution and real-time analysis status.
+
+---
+
+### Analysis Complete
+
+![Analysis Complete](docs/screenshots/Analysis_Complete.png)
+
+Completed analysis with generated artifacts, statistics, and an interactive HTML report ready for review.
+
+---
+
+### HTML Report
+
+![HTML Report](docs/screenshots/report.png)
+
+Interactive offline HTML report with navigation, filtering, search, visual analytics, and detailed findings.
+
+---
+
+### Application Blueprint
+
+![Application Blueprint](docs/screenshots/Application_Blueprint.png)
+
+Interactive application graph that visualizes discovered pages, APIs, technologies, relationships, and attack surface components.
+
+---
+
+### Infrastructure Blueprint
+
+![Infrastructure Blueprint](docs/screenshots/Infrastructure_Blueprint.png)
+
+Infrastructure visualization connecting domains, IP addresses, services, ports, certificates, and network relationships.
+
+---
+
+### HTTP Surface
+
+![HTTP Surface](docs/screenshots/HTTP_Surface.png)
+
+HTTP reconnaissance including response headers, security headers, technologies, redirects, and response metadata.
+
+![HTTP Surface](docs/screenshots/HTTP_Surface2.png)
+
+Detailed HTTP intelligence with endpoint grouping and response classification.
+
+![HTTP Surface](docs/screenshots/HTTP_Surface3.png)
+
+Expanded HTTP analysis highlighting additional application characteristics and security observations.
+
+---
+
+### Endpoint Intelligence
+
+![Endpoints](docs/screenshots/endpoints.png)
+
+Discovered application endpoints collected from HTML, JavaScript, browser traffic, and application assets.
+
+![Endpoints](docs/screenshots/endpoints2.png)
+
+Extended endpoint analysis with categorized routes and additional discovered resources.
+
+---
+
+### IP Intelligence
+
+![IP Report](docs/screenshots/Ip_report.png)
+
+Comprehensive IP intelligence including ASN, hosting provider, geolocation, network ownership, and infrastructure details.
+
+![IP Report](docs/screenshots/ip_report2.png)
+
+Additional IP intelligence with extended infrastructure and security information.
+
+---
+
+### IP Relationships
+
+![IP Relationships](docs/screenshots/IP_Relationships.png)
+
+Relationship graph connecting IP addresses with domains, services, technologies, certificates, and security findings.
+
+---
+
+### World Map
+
+![World Map](docs/screenshots/world_map.png)
+
+Offline geographic visualization showing the approximate location of analyzed infrastructure.
+
+---
+
+### Visual Chain Summary
+
+![Visual Chain Summary](docs/screenshots/Visual_Chain_Summary.png)
+
+Traffic chain overview illustrating how requests travel through the application infrastructure from client to origin.
+
 ## Security
 
 Pamp:
