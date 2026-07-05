@@ -533,7 +533,7 @@ def _domain_report(artifact: dict[str, Any]) -> dict[str, Any]:
         "devtools_intelligence": _devtools_intelligence_report(data),
         "traffic_chain": traffic_chain,
         "sources": _unique_strings(data.get("sources") or [], limit=80),
-        "execution_log": _dedupe_dict_rows(data.get("execution_log") or [], ("stage", "status"), limit=120),
+        "execution_log": _module_status_rows(data.get("execution_log") or [], limit=120),
         "network_summary": _network_summary(devtools.get("network_requests") or []),
         "websocket_urls": [_link_item(item, item) for item in _unique_strings(devtools.get("websocket_urls") or [], limit=80)],
         "trackers": tracker_groups,
@@ -2554,3 +2554,45 @@ def _dedupe_dict_rows(rows: list[dict[str, Any]], keys: tuple[str, ...], limit: 
         if len(output) >= limit:
             break
     return output
+
+
+def _module_status_rows(rows: list[dict[str, Any]], limit: int) -> list[dict[str, str]]:
+    output: list[dict[str, str]] = []
+    by_stage: dict[str, dict[str, str]] = {}
+    severity = {"Completed": 0, "Skipped": 1, "Partial": 2, "Failed": 3}
+    for source in rows:
+        if not isinstance(source, dict):
+            continue
+        stage = str(source.get("stage") or "module").strip() or "module"
+        detail = str(source.get("status") or source.get("detail") or "").strip()
+        outcome = _module_outcome(detail)
+        reason = str(source.get("reason") or "").strip()
+        if not reason and outcome != "Completed":
+            reason = detail
+        current = by_stage.get(stage)
+        if current is None:
+            current = {"stage": stage, "status": outcome, "details": detail, "reason": reason}
+            by_stage[stage] = current
+            output.append(current)
+        else:
+            details = [item for item in (current.get("details"), detail) if item]
+            current["details"] = "; ".join(dict.fromkeys(details))
+            if severity[outcome] > severity[current["status"]]:
+                current["status"] = outcome
+                current["reason"] = reason
+            elif reason and not current.get("reason"):
+                current["reason"] = reason
+        if len(output) >= limit:
+            break
+    return output
+
+
+def _module_outcome(detail: str) -> str:
+    lowered = detail.casefold()
+    if "skip" in lowered:
+        return "Skipped"
+    if any(marker in lowered for marker in ("partial", "no live", "not found", "without records")):
+        return "Partial"
+    if any(marker in lowered for marker in ("failed", "error", "exception", "timeout", "unavailable")):
+        return "Failed"
+    return "Completed"

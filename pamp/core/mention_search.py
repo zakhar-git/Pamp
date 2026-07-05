@@ -143,9 +143,7 @@ _DOM_CAPTURE_SCRIPT = r"""() => {
       node.getAttribute("placeholder"),
       node.getAttribute("title"),
       node.getAttribute("alt"),
-      node.getAttribute("value"),
-      node.getAttribute("href"),
-      node.getAttribute("action")
+      node.getAttribute("value")
     ].filter(Boolean).map(value => String(value).trim()).filter(Boolean);
     return {
       text: [...new Set(values)].join(" | ").slice(0, 4000),
@@ -195,6 +193,12 @@ def search_mentions(
     keywords = parse_keywords(keyword_input)
     if not keywords:
         raise ValueError("Keyword or keywords are empty")
+    invalid_keywords = [keyword for keyword in keywords if not is_meaningful_query(keyword)]
+    if invalid_keywords:
+        raise ValueError(
+            "Search query is too short or contains too little meaningful text: "
+            + ", ".join(invalid_keywords)
+        )
     modes = normalize_modes(mode)
     variants_by_keyword = {
         keyword: generate_variants(keyword)
@@ -209,15 +213,27 @@ def search_mentions(
         artifact_docs = _documents_from_domain_artifact(existing_domain_data)
         coverage.update(row.source_type for row in artifact_docs)
 
-    live = _collect_http_sources(target, debug_log, errors)
+    live = _safe_collection(
+        "HTTP",
+        lambda: _collect_http_sources(target, debug_log, errors),
+        _empty_live_collection(target["url"]),
+        debug_log,
+        errors,
+    )
     documents.extend(live["documents"])
     coverage.update(live["coverage"])
     primary_url = live.get("primary_url") or target["url"]
 
-    browser = _collect_browser_sources(
-        primary_url,
-        target["host"],
-        live.get("browser_urls") or [],
+    browser = _safe_collection(
+        "BROWSER",
+        lambda: _collect_browser_sources(
+            primary_url,
+            target["host"],
+            live.get("browser_urls") or [],
+            debug_log,
+            errors,
+        ),
+        {"documents": [], "coverage": Counter(), "js_urls": [], "css_urls": [], "page_urls": [], "stats": {}},
         debug_log,
         errors,
     )
@@ -232,10 +248,16 @@ def search_mentions(
         live["css_urls"] + browser["css_urls"],
         MAX_CSS_FILES,
     )
-    asset_docs = _collect_assets(
-        asset_urls,
-        css_urls,
-        target["host"],
+    asset_docs = _safe_collection(
+        "ASSETS",
+        lambda: _collect_assets(
+            asset_urls,
+            css_urls,
+            target["host"],
+            debug_log,
+            errors,
+        ),
+        [],
         debug_log,
         errors,
     )
@@ -360,6 +382,12 @@ def parse_keywords(value: str) -> list[str]:
             seen.add(key)
             rows.append(keyword[:180])
     return rows[:40]
+
+
+def is_meaningful_query(value: str) -> bool:
+    normalized = re.sub(r"\s+", " ", str(value or "")).strip()
+    alphanumeric = [character for character in normalized if character.isalnum()]
+    return len(normalized) >= 2 and len(alphanumeric) >= 2
 
 
 def normalize_modes(value: str) -> list[str]:
@@ -493,13 +521,13 @@ def _collect_http_sources(
         for url in parsed["links"]
         if _same_host(url, target["host"])
     )
-    visited = {main_response.url.rstrip("/")}
+    visited = {_canonical_url_key(main_response.url)}
     page_count = 1
     while queue and page_count < MAX_PAGES:
         batch = []
         while queue and len(batch) < 8 and page_count + len(batch) < MAX_PAGES:
             url, depth = queue.popleft()
-            key = url.split("#", 1)[0].rstrip("/")
+            key = _canonical_url_key(url)
             if not key or key in visited or depth > MAX_DEPTH or _is_asset_url(url):
                 continue
             visited.add(key)
@@ -1030,7 +1058,7 @@ def _find_matches(
                 key = (
                     keyword.casefold(),
                     matched_text.casefold(),
-                    document.source_url.casefold(),
+                    _canonical_url_key(document.source_url),
                     document.source_type,
                     document.location,
                     context_hash,
@@ -1207,17 +1235,24 @@ def _build_summary(
     risk_counts = Counter(row["risk"] for row in matches)
     element_counts = Counter(row.get("element_type") or "Page" for row in matches)
     section_counts = Counter(_section_label(row) for row in matches)
-    page_counts = Counter(row.get("page_url") or row.get("source_url") or "" for row in matches)
-    urls = {value for value in page_counts if value}
+    page_counts: Counter[str] = Counter()
+    page_labels: dict[str, str] = {}
+    for row in matches:
+        url = str(row.get("page_url") or row.get("source_url") or "")
+        key = _canonical_url_key(url)
+        if key:
+            page_counts[key] += 1
+            page_labels.setdefault(key, url)
+    urls = set(page_counts)
     scanned_pages = {
-        str(value).split("#", 1)[0]
+        _canonical_url_key(str(value))
         for value in (page_urls or [])
         if value
     }
     matched_scanned_pages = {
-        str(value).split("#", 1)[0]
+        value
         for value in urls
-        if str(value).split("#", 1)[0] in scanned_pages
+        if value in scanned_pages
     }
     source_types = set(source_counts)
     score = min(
@@ -1247,14 +1282,14 @@ def _build_summary(
         "sections": dict(section_counts.most_common()),
         "top_pages": [
             {
-                "url": url,
-                "path": _display_page_path(url),
+                "url": page_labels.get(url, url),
+                "path": _display_page_path(page_labels.get(url, url)),
                 "matches": count,
             }
             for url, count in page_counts.most_common(20)
             if url
         ],
-        "pages_scanned": len(set(page_urls or [])),
+        "pages_scanned": len({_canonical_url_key(value) for value in (page_urls or []) if value}),
         "pages_with_matches": len(matched_scanned_pages),
         "resources_with_matches": len(urls),
         "scan_stats": dict(sorted((scan_stats or {}).items())),
@@ -1274,18 +1309,26 @@ def _page_results(
     page_urls: list[str],
 ) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
+    labels: dict[str, str] = {}
     for row in matches:
         page_url = str(row.get("page_url") or row.get("source_url") or "")
-        if page_url:
-            grouped.setdefault(page_url, []).append(row)
-    ordered_urls = list(page_urls)
-    for page_url in grouped:
-        if page_url not in ordered_urls:
-            ordered_urls.append(page_url)
+        key = _canonical_url_key(page_url)
+        if key:
+            labels.setdefault(key, page_url)
+            grouped.setdefault(key, []).append(row)
+    ordered_urls = []
+    for page_url in page_urls:
+        key = _canonical_url_key(page_url)
+        if key and key not in ordered_urls:
+            labels.setdefault(key, page_url)
+            ordered_urls.append(key)
+    for key in grouped:
+        if key not in ordered_urls:
+            ordered_urls.append(key)
     return [
         {
-            "url": page_url,
-            "path": _display_page_path(page_url),
+            "url": labels.get(page_url, page_url),
+            "path": _display_page_path(labels.get(page_url, page_url)),
             "matches": len(grouped.get(page_url) or []),
             "occurrences": sum(int(row.get("count") or 1) for row in grouped.get(page_url) or []),
             "sections": dict(
@@ -1451,7 +1494,7 @@ def _parse_html_sources(html: str, base_url: str) -> dict[str, Any]:
                     section="Head",
                 )
             )
-        body = soup.get_text(" ", strip=True)
+        body = _visible_page_text(soup)
         if body:
             documents.append(
                 SourceDocument(
@@ -1831,6 +1874,58 @@ def _unique_strings(
         if len(output) >= limit:
             break
     return output
+
+
+def _visible_page_text(soup: Any) -> str:
+    hidden_parents = {"head", "script", "style", "noscript", "template"}
+    values = []
+    for value in soup.stripped_strings:
+        parent_name = str(getattr(getattr(value, "parent", None), "name", "") or "").lower()
+        if parent_name in hidden_parents:
+            continue
+        text = re.sub(r"\s+", " ", str(value)).strip()
+        if text:
+            values.append(text)
+    return " ".join(values)
+
+
+def _canonical_url_key(value: str) -> str:
+    parsed = urlparse(str(value or "").strip())
+    if not parsed.scheme or not parsed.netloc:
+        return str(value or "").split("#", 1)[0].rstrip("/").casefold()
+    path = parsed.path or "/"
+    if path != "/":
+        path = path.rstrip("/")
+    return urlunparse(
+        (parsed.scheme.lower(), parsed.netloc.lower(), path, "", parsed.query, "")
+    )
+
+
+def _empty_live_collection(primary_url: str) -> dict[str, Any]:
+    return {
+        "documents": [],
+        "coverage": Counter(),
+        "js_urls": [],
+        "css_urls": [],
+        "primary_url": primary_url,
+        "page_urls": [],
+        "browser_urls": [],
+        "stats": {},
+    }
+
+
+def _safe_collection(
+    stage: str,
+    operation: Any,
+    fallback: Any,
+    debug_log: DebugLog | None,
+    errors: list[str],
+) -> Any:
+    try:
+        return operation()
+    except Exception as exc:
+        _record_error(errors, debug_log, f"[MENTION][{stage}]", f"error={type(exc).__name__}: {exc}")
+        return fallback
 
 
 def _overlaps(

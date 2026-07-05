@@ -8,6 +8,7 @@ import shutil
 import sys
 import threading
 import time
+import traceback
 from typing import Any
 
 if __package__ in (None, ""):
@@ -22,7 +23,7 @@ from pamp.core.application_blueprint import build_application_blueprint
 from pamp.core.application_route_intelligence import build_application_route_intelligence
 from pamp.core.domain_analyzer import analyze_domain, normalize_domain
 from pamp.core.ip_analyzer import analyze_ip
-from pamp.core.mention_search import search_mentions
+from pamp.core.mention_search import is_meaningful_query, parse_keywords, search_mentions
 from pamp.core.models import ArtifactRecord, safe_filename_part, utc_now
 from pamp.core.report_intelligence import build_analyst_notes, timeline_event
 from pamp.core.case_store import (
@@ -94,7 +95,12 @@ def main() -> None:
             console.print()
             log_warn(t("log.cancelled"))
         except Exception as exc:
-            log_error(str(exc))
+            debug_path = active_case_path(active_state) or OUTPUT_DIR
+            append_debug(debug_path, f"[CLI][UNHANDLED] {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+            if isinstance(exc, ValueError):
+                log_error(str(exc))
+            else:
+                log_error(t("error.analysis_failed"))
 
 
 def set_language(language: str) -> None:
@@ -112,8 +118,8 @@ def show_startup_banner() -> None:
 ██╔══██╗██╔══██╗████╗ ████║██╔══██╗
 ██████╔╝███████║██╔████╔██║██████╔╝
 ██╔═══╝ ██╔══██║██║╚██╔╝██║██╔═══╝
-██║     ██║  ██║██║ ╚═╝ ██║██║
-╚═╝     ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝"""
+██║      ██║  ██║██║ ╚═╝ ██║██║
+╚═╝      ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝"""
     terminal_width = shutil.get_terminal_size(fallback=(100, 24)).columns
     console.print(center_ascii_art(banner, terminal_width), style="bold #6f1d1d")
 
@@ -238,10 +244,21 @@ def read_input(scope: str) -> str:
 
 def handle_ip() -> tuple[ArtifactRecord, dict[str, Any]]:
     ip = read_input(t("prompt.ip")).strip()
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError as exc:
+        raise ValueError(f"Invalid IP address: {ip}") from exc
     active_state = reset_runtime_target_state(DATA_DIR, OUTPUT_DIR, language=LANGUAGE)
     log_secondary(t("log.ip_started"))
-    result = analyze_ip(ip)
-    log_ok(t("log.ip_done"))
+    try:
+        result = analyze_ip(ip, debug_log=lambda message: append_debug(OUTPUT_DIR, message))
+        log_ok(t("log.ip_done"))
+    except Exception as exc:
+        append_debug(OUTPUT_DIR, f"[IP][ANALYSIS] {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+        result = _partial_ip_result(ip, exc)
+        log_warn(t("error.analysis_partial"))
+    for error in result.get("errors") or []:
+        append_debug(OUTPUT_DIR, f"[IP][SOURCE] {error}")
     print_summary(
         t("summary.ip"),
         [
@@ -292,8 +309,12 @@ def handle_domain() -> tuple[ArtifactRecord, dict[str, Any]]:
             progress_callback=progress.update,
         )
     except Exception as exc:
-        append_debug(case_path, f"{t('log.domain_failed')}\nerror={exc}")
-        raise
+        append_debug(
+            case_path,
+            f"{t('log.domain_failed')}\nerror={type(exc).__name__}: {exc}\n{traceback.format_exc()}",
+        )
+        result = _partial_domain_result(domain, exc)
+        log_warn(t("error.analysis_partial"))
     finally:
         progress.stop()
 
@@ -342,7 +363,11 @@ def handle_domain() -> tuple[ArtifactRecord, dict[str, Any]]:
         result["execution_log"] = _append_execution_stage(result.get("execution_log") or [], "discovery_agent", "skipped for IP input")
         result["execution_log"] = _append_execution_stage(result.get("execution_log") or [], "sqli_analysis_agent", "skipped for IP input")
     else:
-        workflow = run_orchestrator(result.get("domain") or domain, result)
+        workflow = run_orchestrator(
+            result.get("domain") or domain,
+            result,
+            debug_log=lambda message: append_debug(case_path, message),
+        )
         discovery = workflow.get("discovery") or {}
         sqli_analysis = workflow.get("sqli_analysis") or {}
         domain_updates = workflow.get("domain_updates") or {}
@@ -356,16 +381,24 @@ def handle_domain() -> tuple[ArtifactRecord, dict[str, Any]]:
         result["execution_log"] = _append_execution_stage(
             result.get("execution_log") or [],
             "discovery_agent",
-            f"{len(discovery.get('findings') or [])} interesting",
+            _workflow_execution_status(
+                workflow.get("steps") or [],
+                "discovery_agent",
+                f"{len(discovery.get('findings') or [])} interesting",
+            ),
         )
         result["execution_log"] = _append_execution_stage(
             result.get("execution_log") or [],
             "sqli_analysis_agent",
-            f"{len(sqli_analysis.get('findings') or [])} confirmed",
+            _workflow_execution_status(
+                workflow.get("steps") or [],
+                "sqli_analysis_agent",
+                f"{len(sqli_analysis.get('findings') or [])} confirmed",
+            ),
         )
     security_count = len(result.get("security_findings") or []) + len(result.get("security_signals") or [])
     result["execution_log"] = _append_execution_stage(
-        result.get("execution_log") or [],
+        result.setdefault("execution_log", []),
         "security_audit",
         f"{security_count} finding(s)",
     )
@@ -384,16 +417,24 @@ def handle_domain() -> tuple[ArtifactRecord, dict[str, Any]]:
             detail=f"{security_count} passive finding(s)",
         )
     )
-    result["application_route_intelligence"] = build_application_route_intelligence(result)
-    route_summary = result["application_route_intelligence"].get("summary") or {}
-    result["execution_log"] = _append_execution_stage(
-        result.get("execution_log") or [],
+    result["application_route_intelligence"] = _recover_module(
         "application_route_intelligence",
-        f"{route_summary.get('total_routes') or 0} route(s), {route_summary.get('high_interest') or 0} high-interest",
+        lambda: build_application_route_intelligence(result),
+        {"status": "failed", "summary": {}, "routes": [], "errors": ["Module failed"]},
+        case_path,
+        result.setdefault("execution_log", []),
     )
+    route_summary = result["application_route_intelligence"].get("summary") or {}
+    route_failed = result["application_route_intelligence"].get("status") == "failed"
+    if not route_failed:
+        result["execution_log"] = _append_execution_stage(
+            result.setdefault("execution_log", []),
+            "application_route_intelligence",
+            f"{route_summary.get('total_routes') or 0} route(s), {route_summary.get('high_interest') or 0} high-interest",
+        )
     result["analyst_timeline"].append(
         timeline_event(
-            "Application Route Intelligence completed",
+            "Application Route Intelligence failed" if route_failed else "Application Route Intelligence completed",
             source="application_route_intelligence",
             detail=(
                 f"{route_summary.get('total_routes') or 0} route(s), "
@@ -402,13 +443,25 @@ def handle_domain() -> tuple[ArtifactRecord, dict[str, Any]]:
             ),
         )
     )
-    result["analyst_notes"] = build_analyst_notes(result)
+    result["analyst_notes"] = _recover_module(
+        "analyst_notes",
+        lambda: build_analyst_notes(result),
+        [],
+        case_path,
+        result.get("execution_log") or [],
+    )
     if isinstance(result.get("http_surface"), dict):
         result["http_surface"]["analyst_notes"] = result["analyst_notes"]
     result["analyst_timeline"].append(
         timeline_event("HTML report prepared", source="report", detail="output/report.html")
     )
-    result["application_blueprint"] = build_application_blueprint(result)
+    result["application_blueprint"] = _recover_module(
+        "application_blueprint",
+        lambda: build_application_blueprint(result),
+        {"status": "failed", "summary": {}, "nodes": [], "edges": [], "insights": []},
+        case_path,
+        result.get("execution_log") or [],
+    )
     blueprint_summary = result["application_blueprint"].get("summary") or {}
     result["analyst_timeline"].append(
         timeline_event(
@@ -446,8 +499,15 @@ def handle_domain() -> tuple[ArtifactRecord, dict[str, Any]]:
     try:
         paths = export_html_report(report_artifacts, {}, OUTPUT_DIR / "report.html", language=LANGUAGE)
     except Exception as exc:
-        append_debug(case_path, f"[DOMAIN][REPORT] error={exc}")
-        raise
+        append_debug(case_path, f"[DOMAIN][REPORT] {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+        fallback = ArtifactRecord(
+            type="domain",
+            label=result["domain"],
+            data=_partial_domain_result(result["domain"], exc),
+            source="report_recovery",
+        )
+        paths = export_html_report([fallback], {}, OUTPUT_DIR / "report.html", language=LANGUAGE)
+        log_warn(t("error.report_partial"))
     log_ok(f"{t('field.report')}: {display_path(paths['report'])}")
 
     log_ok(t("log.trackers"))
@@ -503,6 +563,8 @@ def handle_mention_search() -> tuple[ArtifactRecord, dict[str, Any]]:
         raise ValueError(t("error.mention_target_empty"))
     if not keywords:
         raise ValueError(t("error.keywords_empty"))
+    if any(not is_meaningful_query(keyword) for keyword in parse_keywords(keywords.replace("\\n", "\n"))):
+        raise ValueError(t("error.mention_query_invalid"))
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     domain_record = _latest_domain_artifact(target)
@@ -552,8 +614,14 @@ def handle_mention_search() -> tuple[ArtifactRecord, dict[str, Any]]:
             language=LANGUAGE,
         )
     except Exception as exc:
-        append_debug(OUTPUT_DIR, f"[MENTION][REPORT] error={exc}")
-        raise
+        append_debug(OUTPUT_DIR, f"[MENTION][REPORT] {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+        paths = export_html_report(
+            artifacts,
+            {},
+            OUTPUT_DIR / "mentions_report.html",
+            language=LANGUAGE,
+        )
+        log_warn(t("error.report_partial"))
 
     summary = result.get("summary") or {}
     print_summary(
@@ -606,7 +674,26 @@ def auto_export_report(
     artifacts: list[ArtifactRecord],
     active_state: dict[str, Any],
 ) -> dict[str, Any]:
-    paths = export_html_report(artifacts, {}, OUTPUT_DIR / "report.html", language=LANGUAGE)
+    try:
+        paths = export_html_report(artifacts, {}, OUTPUT_DIR / "report.html", language=LANGUAGE)
+    except Exception as exc:
+        append_debug(OUTPUT_DIR, f"[REPORT][AUTO] {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+        artifact = artifacts[-1] if artifacts else None
+        if artifact and artifact.type == "ip":
+            fallback_data = _partial_ip_result(artifact.label, exc)
+            fallback_type = "ip"
+        else:
+            label = artifact.label if artifact else "unknown"
+            fallback_data = _partial_domain_result(label, exc)
+            fallback_type = "domain"
+        fallback = ArtifactRecord(
+            type=fallback_type,
+            label=artifact.label if artifact else "unknown",
+            data=fallback_data,
+            source="report_recovery",
+        )
+        paths = export_html_report([fallback], {}, OUTPUT_DIR / "report.html", language=LANGUAGE)
+        log_warn(t("error.report_partial"))
     case_path = active_case_path(active_state)
     if case_path:
         artifacts_path = write_artifacts(case_path, artifacts)
@@ -648,20 +735,17 @@ def print_execution_log(rows: list[dict[str, str]]) -> None:
         stage = row.get("stage", "").strip() or "module"
         status = row.get("status", "").strip()
         lowered = status.lower()
-        if stage in {"historical_intelligence", "reputation_intelligence"}:
-            label = t("stage.historical") if stage == "historical_intelligence" else t("stage.reputation")
-            if "failed" in lowered or "error" in lowered or "partial" in lowered or "timeout" in lowered:
-                log_warn(f"{label} {t('status.partial')}")
-            else:
-                log_ok(f"{label} {t('status.done')}")
-            continue
         label = _stage_label(stage)
-        if "failed" in lowered or "error" in lowered:
-            log_error(f"{label} {t('status.failed')}")
-        elif "partial" in lowered or "timeout" in lowered:
-            log_warn(f"{label} {t('status.partial')}")
+        if "timeout" in lowered:
+            log_warn(f"{label}: timeout")
+        elif "failed" in lowered or "error" in lowered or "unavailable" in lowered:
+            log_warn(f"{label}: {t('status.failed')}")
+        elif "partial" in lowered:
+            log_warn(f"{label}: {status}")
+        elif "skip" in lowered:
+            log_warn(f"{label}: {status}")
         else:
-            log_ok(label)
+            log_ok(f"{label}: {status or t('status.done')}")
 
 
 def _stage_label(stage: str) -> str:
@@ -674,7 +758,7 @@ def _stage_label(stage: str) -> str:
         "sensitive_files": t("stage.sensitive_files"),
         "historical_intelligence": t("stage.historical"),
         "reputation_intelligence": t("stage.reputation"),
-    }.get(stage, f"{stage} {t('stage.generic')}")
+    }.get(stage, stage.replace("_", " ").strip().title() or t("stage.generic"))
 
 
 def _debug_modules(result: dict[str, Any]) -> str:
@@ -939,13 +1023,21 @@ def _print_pipeline_summary(
     crawler = result.get("crawler_agent") or {}
     crawler_summary = crawler.get("summary") or {}
     sqli_summary = sqli_analysis.get("summary") or {}
-    log_ok(t("log.discovery_completed"))
+    discovery_failed = str(discovery.get("status") or "").lower() == "failed"
+    sqli_failed = str(sqli_analysis.get("status") or "").lower() == "failed"
+    if discovery_failed:
+        log_warn(f"{t('stage.discovery', 'Discovery')}: {t('status.failed')}")
+    else:
+        log_ok(t("log.discovery_completed"))
     log_ok(f"{t('field.routes_found')}: {len(discovery.get('all_results') or [])}")
     log_ok(f"{t('field.interesting_routes')}: {len(discovery.get('findings') or [])}")
     log_ok(f"{t('field.api_endpoints')}: {len(result.get('api_endpoints') or [])}")
     log_ok(f"{t('field.forms')}: {crawler_summary.get('forms') or len(((result.get('html') or {}).get('forms') or []))}")
     log_ok(f"{t('field.parameters')}: {sqli_summary.get('candidate_parameters') or 0}")
-    log_ok(t("log.sqli_completed"))
+    if sqli_failed:
+        log_warn(f"SQLi: {t('status.failed')}")
+    else:
+        log_ok(t("log.sqli_completed"))
     log_ok(f"{t('field.confirmed_signals')}: {len(sqli_analysis.get('findings') or [])}")
 
 
@@ -1090,6 +1182,144 @@ def _append_execution_stage(rows: list[dict[str, str]], stage: str, status: str)
     output = [row for row in rows if row.get("stage") != stage]
     output.append({"stage": stage, "status": status})
     return output
+
+
+def _workflow_execution_status(
+    steps: list[dict[str, Any]],
+    agent: str,
+    success_detail: str,
+) -> str:
+    row = next((item for item in steps if item.get("agent") == agent), {})
+    status = str(row.get("status") or "done").lower()
+    if status == "failed":
+        return f"failed: {row.get('reason') or 'module error'}"
+    if status == "skipped":
+        return f"skipped: {row.get('reason') or 'not applicable'}"
+    return success_detail
+
+
+def _recover_module(
+    stage: str,
+    operation: Any,
+    fallback: Any,
+    case_path: Path,
+    execution_log: list[dict[str, str]],
+) -> Any:
+    try:
+        return operation()
+    except Exception as exc:
+        reason = f"{type(exc).__name__}: {exc}"
+        execution_log.append({"stage": stage, "status": f"failed: {reason}"})
+        append_debug(case_path, f"[MODULE][{stage}] {reason}\n{traceback.format_exc()}")
+        log_warn(f"{stage.replace('_', ' ').title()}: {t('status.failed')}")
+        return fallback
+
+
+def _partial_domain_result(domain_input: str, exc: Exception) -> dict[str, Any]:
+    domain = normalize_domain(domain_input) or domain_input.strip()
+    reason = f"{type(exc).__name__}: {exc}"
+    return {
+        "type": "domain_analysis",
+        "input": domain_input,
+        "host": domain,
+        "domain": domain,
+        "dns": {},
+        "reverse_dns": [],
+        "email_auth": {"spf": [], "dmarc": [], "dkim_hints": []},
+        "rdap": {},
+        "asn_bgp": [],
+        "tls_certificate": {},
+        "certificate_transparency": [],
+        "subdomains": [],
+        "http": {"status_code": None, "headers": {}},
+        "http_surface": {
+            "status_code": None,
+            "headers": {},
+            "probes": [],
+            "redirect_chain": [],
+            "interesting_paths": [],
+            "security_signals": [],
+            "errors": [reason],
+        },
+        "security_headers": {},
+        "security_signals": [],
+        "security_findings": [],
+        "html": {},
+        "devtools": {"available": False, "errors": [reason]},
+        "traffic_chain": {},
+        "javascript_intelligence": {},
+        "js_intelligence": {},
+        "favicon_intelligence": {},
+        "cloud_buckets": {},
+        "oauth_intelligence": {},
+        "sensitive_public_files": {"findings": [], "errors": []},
+        "historical_intelligence": {"status": "failed", "sources": [], "errors": [reason]},
+        "reputation_intelligence": {"status": "failed", "errors": [reason]},
+        "technologies": [],
+        "detected_technologies": [],
+        "api_endpoints": [],
+        "emails": [],
+        "phones": [],
+        "social_links": [],
+        "social_profiles": [],
+        "linked_ip_addresses": [],
+        "port_surface": {"status": "failed", "open_ports": [], "summary": {}, "errors": [reason]},
+        "sources": [],
+        "execution_log": [{"stage": "domain_analysis", "status": f"failed: {reason}"}],
+        "analyst_timeline": [timeline_event("Domain analysis failed", detail="Continuing with partial report")],
+        "errors": [reason],
+        "timestamp": utc_now(),
+    }
+
+
+def _partial_ip_result(ip: str, exc: Exception) -> dict[str, Any]:
+    parsed = ipaddress.ip_address(ip)
+    reason = f"{type(exc).__name__}: {exc}"
+    summary = {
+        "ip": ip,
+        "open_ports": 0,
+        "detected_services": 0,
+        "detected_technologies": 0,
+        "risk_signals": 0,
+    }
+    return {
+        "ip": ip,
+        "version": parsed.version,
+        "is_private": parsed.is_private,
+        "country": "",
+        "city": "",
+        "asn": "",
+        "organization": "",
+        "provider": "",
+        "reverse_dns": "",
+        "hosting_or_datacenter": False,
+        "vpn_proxy_tor": False,
+        "rdap": {},
+        "port_surface": {"status": "failed", "open_ports": [], "summary": {}, "errors": [reason]},
+        "ip_intelligence": {
+            "status": "failed",
+            "summary": summary,
+            "geo": {},
+            "asn": {},
+            "provider": {},
+            "registry": {},
+            "classification": {},
+            "services": [],
+            "ports": [],
+            "technologies": [],
+            "relationships": {},
+            "blueprint": {},
+            "timeline": [{"stage": "IP analysis", "status": "failed", "detail": reason}],
+            "risk_signals": [],
+            "evidence": [],
+            "insights": [],
+            "http_observations": [],
+            "tls_observations": [],
+        },
+        "sources": [],
+        "errors": [reason],
+        "checked_at": utc_now(),
+    }
 
 
 def state_decoded_artifacts(rows: list[dict[str, Any]]) -> list[dict[str, str]]:

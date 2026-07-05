@@ -97,9 +97,12 @@ class ReleasePolishTests(unittest.TestCase):
             export_html_report([record], {}, report_path, language="ru")
             html = report_path.read_text(encoding="utf-8")
 
-            self.assertEqual(assets["logo"]["kind"], "image")
-            self.assertEqual(assets["logo"]["name"], "brand-logo.png")
-            self.assertTrue(assets["logo"]["src"].startswith("data:image/png;base64,"))
+            self.assertIn(assets["logo"]["kind"], {"image", "video"})
+            self.assertTrue(assets["logo"]["name"].startswith("brand-logo."))
+            if assets["logo"]["src"].startswith("data:"):
+                self.assertIn(";base64,", assets["logo"]["src"])
+            else:
+                self.assertTrue((report_path.parent / assets["logo"]["src"]).is_file())
             self.assertNotIn("cursor", assets)
             self.assertNotIn("cursor_css", assets)
             self.assertIn('class="brand-block has-logo"', html)

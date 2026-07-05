@@ -273,7 +273,7 @@
       const raw = text(value);
       if (!raw) return "";
       if (type === "risk") return badge(raw, normalizeRisk(raw));
-      if (type === "status") return badge(raw, normalizeRisk(raw));
+      if (type === "status") return badge(tr(raw), normalizeRisk(raw));
       if (type === "url") return renderUrlCell(raw);
       if (["url", "domain", "ip", "email", "phone", "asn", "header", "technology", "cookie"].includes(type)) return link(raw, type);
       return escapeHtml(cleanDisplayText(raw));
@@ -4147,7 +4147,9 @@
       `;
       queueTable("table-execution-log", [
         { key: "stage", label: "Stage" },
-        { key: "status", label: "Status", type: "status" }
+        { key: "status", label: "Status", type: "status" },
+        { key: "details", label: "Details" },
+        { key: "reason", label: "Reason" }
       ], isIpReport ? [] : asArray(domain.execution_log));
       return sectionHtml(sectionById("raw-data"), body, "Stored normalized artifacts and runtime diagnostics");
     }
@@ -4166,7 +4168,9 @@
       `;
       queueTable("table-execution-log", [
         { key: "stage", label: "Stage" },
-        { key: "status", label: "Status", type: "status" }
+        { key: "status", label: "Status", type: "status" },
+        { key: "details", label: "Details" },
+        { key: "reason", label: "Reason" }
       ], asArray(domain.execution_log));
       return sectionHtml(sectionById("raw-data"), body, "Runtime diagnostics");
     }

@@ -8,8 +8,10 @@ from unittest.mock import patch
 from pamp.core.mention_search import (
     SourceDocument,
     _find_matches,
+    _page_results,
     _parse_html_sources,
     generate_variants,
+    is_meaningful_query,
     normalize_modes,
     parse_keywords,
     search_mentions,
@@ -35,6 +37,17 @@ class MentionSearchTests(unittest.TestCase):
         self.assertIn("steamLogin", variants)
         self.assertIn("steam_auth", variants)
         self.assertIn("steam-callback", variants)
+        self.assertTrue(is_meaningful_query("steam"))
+        self.assertFalse(is_meaningful_query("1"))
+        self.assertFalse(is_meaningful_query("_"))
+        self.assertFalse(is_meaningful_query("a"))
+
+    @patch("pamp.core.mention_search._collect_http_sources")
+    def test_meaningless_query_is_rejected_before_network(self, collect_http) -> None:
+        for query in ("1", "_", "a"):
+            with self.subTest(query=query), self.assertRaises(ValueError):
+                search_mentions("example.test", query)
+        collect_http.assert_not_called()
 
     def test_overlap_dedupe_and_sensitive_proximity(self) -> None:
         documents = [
@@ -189,6 +202,41 @@ class MentionSearchTests(unittest.TestCase):
         self.assertTrue(
             any("#:~:text=" in row["navigation_url"] for row in matches)
         )
+
+    def test_page_text_excludes_hidden_markup_and_groups_equivalent_urls(self) -> None:
+        parsed = _parse_html_sources(
+            """
+            <html><head><style>.hidden-steam { color: red; }</style></head>
+            <body><script>const hiddenSteam = true;</script><template>steam template</template>
+            <p>Visible Steam profile</p></body></html>
+            """,
+            "https://example.test/",
+        )
+        page_text = next(row.text for row in parsed["documents"] if row.location == "Page text")
+        self.assertEqual(page_text, "Visible Steam profile")
+        self.assertTrue(any(row.source_type == "js" for row in parsed["documents"]))
+
+        pages = _page_results(
+            [
+                {"page_url": "https://EXAMPLE.test/path/#one", "count": 1, "section": "Page"},
+                {"page_url": "https://example.test/path", "count": 2, "section": "Page"},
+            ],
+            ["https://example.test/path/", "https://example.test/path"],
+        )
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0]["matches"], 2)
+        self.assertEqual(pages[0]["occurrences"], 3)
+
+    @patch("pamp.core.mention_search._collect_assets", return_value=[])
+    @patch("pamp.core.mention_search._collect_browser_sources", side_effect=RuntimeError("browser unavailable"))
+    @patch("pamp.core.mention_search._collect_http_sources", side_effect=RuntimeError("network unavailable"))
+    def test_collection_failures_still_return_a_result(self, _http, _browser, _assets) -> None:
+        debug = []
+        result = search_mentions("example.test", "steam", debug_log=debug.append)
+        self.assertEqual(result["type"], "mention_search")
+        self.assertEqual(result["summary"]["matches"], 0)
+        self.assertGreaterEqual(len(result["errors"]), 2)
+        self.assertTrue(any("[MENTION][HTTP]" in row for row in debug))
 
     def test_specialized_report_is_compact_and_escapes_context(self) -> None:
         data = {

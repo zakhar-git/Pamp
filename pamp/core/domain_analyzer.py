@@ -6,6 +6,7 @@ import ipaddress
 import re
 import socket
 import ssl
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -223,9 +224,25 @@ def analyze_domain(
         debug_log=debug_log,
     )
     _notify_progress(progress_callback, 1, "progress.http", "active")
-    http_surface = http_surface_future.result()
-    reverse_dns = reverse_dns_future.result()
-    email_auth = email_auth_future.result()
+    http_surface = _safe_module_result(
+        http_surface_future,
+        "http_surface",
+        _empty_http_surface,
+        errors,
+        execution_log,
+        debug_log,
+    )
+    reverse_dns = _safe_module_result(
+        reverse_dns_future, "reverse_dns", list, errors, execution_log, debug_log
+    )
+    email_auth = _safe_module_result(
+        email_auth_future,
+        "email_auth",
+        lambda: {"spf": [], "dmarc": [], "dkim_hints": []},
+        errors,
+        execution_log,
+        debug_log,
+    )
     errors.extend(http_surface.get("errors") or [])
     html = http_surface.pop("_html", "")
     http_surface.pop("_body_text", None)
@@ -286,17 +303,39 @@ def analyze_domain(
         )
         _notify_progress(progress_callback, 2, "progress.browser", "active")
         if base_url and not target_is_ip:
-            devtools = parse_web_deep(base_url, output_dir=artifact_dir, traffic_callback=traffic_log)
+            devtools = _safe_module_call(
+                lambda: parse_web_deep(base_url, output_dir=artifact_dir, traffic_callback=traffic_log),
+                "devtools",
+                lambda: {"available": False, "errors": ["Browser analysis failed"]},
+                errors,
+                execution_log,
+                debug_log,
+            )
             execution_log.append({"stage": "devtools", "status": "ok" if devtools.get("available") else "partial"})
         else:
             reason = "skipped for IP input" if target_is_ip else "skipped"
             devtools = {"available": False, "errors": [] if target_is_ip else ["No live HTTP service detected"]}
             execution_log.append({"stage": "devtools", "status": reason})
-        js_intel = js_intel_future.result()
-        rdap_info = rdap_future.result()
-        tls_info = tls_future.result()
-        asn_bgp = asn_future.result()
-        certificate_transparency = certificate_future.result()
+        js_intel = _safe_module_result(
+            js_intel_future, "js_collection", dict, errors, execution_log, debug_log
+        )
+        rdap_info = _safe_module_result(
+            rdap_future, "rdap", dict, errors, execution_log, debug_log
+        )
+        tls_info = _safe_module_result(
+            tls_future, "tls", dict, errors, execution_log, debug_log
+        )
+        asn_bgp = _safe_module_result(
+            asn_future, "asn_bgp", list, errors, execution_log, debug_log
+        )
+        certificate_transparency = _safe_module_result(
+            certificate_future,
+            "certificate_transparency",
+            list,
+            errors,
+            execution_log,
+            debug_log,
+        )
     if target_is_ip:
         execution_log.append({"stage": "rdap", "status": "skipped for IP input"})
         execution_log.append({"stage": "certificate_transparency", "status": "skipped for IP input"})
@@ -315,28 +354,49 @@ def analyze_domain(
     _notify_progress(progress_callback, 4, "progress.browser")
     security_headers = _security_headers(http_info.get("headers") or {}) if http_info.get("status_code") is not None else {}
     if base_url and not target_is_ip:
-        devtools = enrich_devtools_intelligence(
-            devtools,
-            base_url=base_url,
-            js_intel=js_intel,
-            security_headers=security_headers,
+        devtools = _safe_module_call(
+            lambda: enrich_devtools_intelligence(
+                devtools,
+                base_url=base_url,
+                js_intel=js_intel,
+                security_headers=security_headers,
+            ),
+            "devtools_enrichment",
+            lambda: devtools,
+            errors,
+            execution_log,
+            debug_log,
         )
     _notify_progress(progress_callback, 4, "progress.traffic", "active")
     social_links, social_link_sources = _social_links_from_collected_data(html_signals, devtools)
     html_signals["social_links"] = social_links
-    social_profiles = collect_social_profiles(
-        social_links,
+    social_profiles = _safe_module_call(
+        lambda: collect_social_profiles(
+            social_links,
+            errors,
+            execution_log,
+            link_sources=social_link_sources,
+        ),
+        "social_intelligence",
+        list,
         errors,
         execution_log,
-        link_sources=social_link_sources,
+        debug_log,
     )
     social_intelligence = build_social_intelligence(social_profiles, domain)
     traffic_chain = (
-        build_traffic_chain(
-            target=domain,
-            final_url=str(devtools.get("final_url") or base_url),
-            devtools=devtools,
-            debug_log=debug_log,
+        _safe_module_call(
+            lambda: build_traffic_chain(
+                target=domain,
+                final_url=str(devtools.get("final_url") or base_url),
+                devtools=devtools,
+                debug_log=debug_log,
+            ),
+            "traffic_chain",
+            lambda: _empty_traffic_chain(domain, "Traffic Chain module failed"),
+            errors,
+            execution_log,
+            debug_log,
         )
         if base_url and not target_is_ip
         else _empty_traffic_chain(
@@ -391,13 +451,37 @@ def analyze_domain(
             if base_url and not target_is_ip
             else {"findings": [], "checked_paths": [], "errors": []}
         )
-        js_intelligence = js_intelligence_future.result()
-        favicon_intelligence = favicon_future.result()
-        sensitive_files = sensitive_future.result()
+        js_intelligence = _safe_module_result(
+            js_intelligence_future,
+            "js_intelligence",
+            _empty_js_intelligence,
+            errors,
+            execution_log,
+            debug_log,
+        )
+        favicon_intelligence = _safe_module_result(
+            favicon_future,
+            "favicon_intelligence",
+            _empty_favicon_intelligence,
+            errors,
+            execution_log,
+            debug_log,
+        )
+        sensitive_files = _safe_module_result(
+            sensitive_future,
+            "sensitive_files",
+            lambda: {"findings": [], "checked_paths": [], "errors": []},
+            errors,
+            execution_log,
+            debug_log,
+        )
     execution_log.append(
         {
             "stage": "js_intelligence",
-            "status": f"{len(js_intelligence.get('api_endpoints') or [])} endpoint(s)",
+            "status": (
+                f"{len(js_intelligence.get('files') or [])} resource(s), "
+                f"{len(js_intelligence.get('api_endpoints') or [])} endpoint(s)"
+            ),
         }
     )
     execution_log.append(
@@ -407,16 +491,23 @@ def analyze_domain(
         }
     )
     oauth_intelligence = (
-        analyze_oauth(
-            base_url=base_url,
-            sources=_oauth_sources(
-                html=html,
-                html_signals=html_signals,
-                js_intelligence=js_intelligence,
-                devtools=devtools,
-                http_surface=http_surface,
+        _safe_module_call(
+            lambda: analyze_oauth(
+                base_url=base_url,
+                sources=_oauth_sources(
+                    html=html,
+                    html_signals=html_signals,
+                    js_intelligence=js_intelligence,
+                    devtools=devtools,
+                    http_surface=http_surface,
+                ),
+                debug_log=debug_log,
             ),
-            debug_log=debug_log,
+            "oauth_intelligence",
+            _empty_oauth_intelligence,
+            errors,
+            execution_log,
+            debug_log,
         )
         if base_url
         else _empty_oauth_intelligence()
@@ -440,12 +531,19 @@ def analyze_domain(
     )
 
     combined_text = _combined_detection_text(http_info, html, html_signals, js_intel, devtools)
-    technology_fingerprints = fingerprint_technologies(
-        http_surface,
-        html=html,
-        html_signals=html_signals,
-        js_intel=js_intel,
-        devtools=devtools,
+    technology_fingerprints = _safe_module_call(
+        lambda: fingerprint_technologies(
+            http_surface,
+            html=html,
+            html_signals=html_signals,
+            js_intel=js_intel,
+            devtools=devtools,
+        ),
+        "technology_fingerprint",
+        list,
+        errors,
+        execution_log,
+        debug_log,
     )
     http_surface["technologies"] = technology_fingerprints
     http_surface["analyst_notes"] = analyst_notes(http_surface)
@@ -507,24 +605,48 @@ def analyze_domain(
                 html_signals=html_signals,
             )
         )
-        historical_intelligence = historical_future.result()
-        reputation_intelligence = reputation_future.result()
+        historical_intelligence = _safe_module_result(
+            historical_future,
+            "historical_intelligence",
+            lambda: {"status": "failed", "sources": [], "errors": ["Module failed"], "debug": {}},
+            errors,
+            execution_log,
+            debug_log,
+        )
+        reputation_intelligence = _safe_module_result(
+            reputation_future,
+            "reputation_intelligence",
+            lambda: {"status": "failed", "summary": {}, "errors": ["Module failed"], "debug": {}},
+            errors,
+            execution_log,
+            debug_log,
+        )
     execution_log.append(
         {
             "stage": "historical_intelligence",
-            "status": historical_intelligence.get("status") or "partial",
+            "status": _source_coverage_status(
+                historical_intelligence,
+                len(historical_intelligence.get("sources") or []) or 2,
+            ),
         }
     )
-    cloud_buckets = analyze_cloud_buckets(
-        _cloud_sources(
-            html=html,
-            html_signals=html_signals,
-            js_intelligence=js_intelligence,
-            devtools=devtools,
-            http_surface=http_surface,
-            historical=historical_intelligence,
+    cloud_buckets = _safe_module_call(
+        lambda: analyze_cloud_buckets(
+            _cloud_sources(
+                html=html,
+                html_signals=html_signals,
+                js_intelligence=js_intelligence,
+                devtools=devtools,
+                http_surface=http_surface,
+                historical=historical_intelligence,
+            ),
+            debug_log=debug_log,
         ),
-        debug_log=debug_log,
+        "cloud_bucket_intelligence",
+        lambda: {"candidates": [], "verified": [], "public_objects": [], "errors": ["Module failed"]},
+        errors,
+        execution_log,
+        debug_log,
     )
     execution_log.append(
         {
@@ -535,18 +657,32 @@ def analyze_domain(
     execution_log.append(
         {
             "stage": "reputation_intelligence",
-            "status": reputation_intelligence.get("status") or "partial",
+            "status": _source_coverage_status(reputation_intelligence, 5),
         }
     )
     _notify_progress(progress_callback, 8, "progress.historical")
 
-    javascript_intelligence = build_javascript_intelligence(
-        html_signals,
-        js_intel,
-        devtools,
-        technology_fingerprints,
+    javascript_intelligence = _safe_module_call(
+        lambda: build_javascript_intelligence(
+            html_signals,
+            js_intel,
+            devtools,
+            technology_fingerprints,
+        ),
+        "javascript_report_intelligence",
+        dict,
+        errors,
+        execution_log,
+        debug_log,
     )
-    cdn_detection = build_cdn_detection(technology_fingerprints)
+    cdn_detection = _safe_module_call(
+        lambda: build_cdn_detection(technology_fingerprints),
+        "cdn_detection",
+        list,
+        errors,
+        execution_log,
+        debug_log,
+    )
     for path in http_surface.get("interesting_paths") or []:
         analyst_timeline.append(
             timeline_event(
@@ -565,13 +701,23 @@ def analyze_domain(
         )
 
     _notify_progress(progress_callback, 8, "progress.port_surface", "active")
-    port_surface = port_future.result()
+    port_surface = _safe_module_result(
+        port_future,
+        "port_surface",
+        lambda: _empty_port_surface("Port scan module failed"),
+        errors,
+        execution_log,
+        debug_log,
+    )
     background_executor.shutdown(wait=True, cancel_futures=False)
     port_summary = port_surface.get("summary") or {}
     execution_log.append(
         {
             "stage": "port_surface",
-            "status": str(port_surface.get("status") or "unknown"),
+            "status": (
+                f"{port_summary.get('open_ports') or 0} open port(s); "
+                f"{port_surface.get('status') or 'unknown'}"
+            ),
         }
     )
     analyst_timeline.append(
@@ -694,7 +840,14 @@ def analyze_domain(
         ),
     }
     _notify_progress(progress_callback, 9, "progress.routes", "active")
-    result["application_route_intelligence"] = build_application_route_intelligence(result, html_text=html)
+    result["application_route_intelligence"] = _safe_module_call(
+        lambda: build_application_route_intelligence(result, html_text=html),
+        "application_route_intelligence",
+        lambda: {"status": "failed", "summary": {}, "routes": [], "errors": ["Module failed"]},
+        result["errors"],
+        result["execution_log"],
+        debug_log,
+    )
     route_summary = result["application_route_intelligence"].get("summary") or {}
     result["execution_log"].append(
         {
@@ -709,7 +862,14 @@ def analyze_domain(
             detail=f"{route_summary.get('total_routes') or 0} route(s), {route_summary.get('high_interest') or 0} high-interest",
         )
     )
-    result["analyst_notes"] = build_analyst_notes(result)
+    result["analyst_notes"] = _safe_module_call(
+        lambda: build_analyst_notes(result),
+        "analyst_notes",
+        list,
+        result["errors"],
+        result["execution_log"],
+        debug_log,
+    )
     result["http_surface"]["analyst_notes"] = result["analyst_notes"]
     result["analyst_timeline"].append(
         timeline_event(
@@ -735,6 +895,86 @@ def _notify_progress(
     except Exception:
         # Progress output must never interrupt analysis.
         return
+
+
+def _safe_module_result(
+    future: Any,
+    stage: str,
+    fallback_factory: Any,
+    errors: list[str],
+    execution_log: list[dict[str, str]],
+    debug_log: Any | None,
+) -> Any:
+    return _safe_module_call(
+        future.result,
+        stage,
+        fallback_factory,
+        errors,
+        execution_log,
+        debug_log,
+    )
+
+
+def _safe_module_call(
+    operation: Any,
+    stage: str,
+    fallback_factory: Any,
+    errors: list[str],
+    execution_log: list[dict[str, str]],
+    debug_log: Any | None,
+) -> Any:
+    try:
+        return operation()
+    except Exception as exc:
+        reason = f"{type(exc).__name__}: {exc}"
+        errors.append(f"{stage}: {reason}")
+        execution_log.append({"stage": stage, "status": f"failed: {reason}"})
+        if debug_log:
+            try:
+                debug_log(f"[DOMAIN][{stage.upper()}] {reason}\n{traceback.format_exc()}")
+            except Exception:
+                pass
+        return fallback_factory()
+
+
+def _empty_http_surface() -> dict[str, Any]:
+    return {
+        "status_code": None,
+        "primary_url": "",
+        "final_url": "",
+        "headers": {},
+        "probes": [],
+        "redirect_chain": [],
+        "interesting_paths": [],
+        "security_signals": [],
+        "cookies": [],
+        "errors": ["HTTP surface module failed"],
+        "_html": "",
+        "_body_text": "",
+    }
+
+
+def _empty_port_surface(reason: str) -> dict[str, Any]:
+    return {
+        "status": "failed",
+        "skip_reason": reason,
+        "open_ports": [],
+        "summary": {"open_ports": 0, "services_identified": 0, "sensitive_services": 0},
+        "errors": [reason],
+    }
+
+
+def _source_coverage_status(payload: dict[str, Any], total_sources: int) -> str:
+    unavailable = {
+        str(item.get("source") or item.get("name") or item)
+        if isinstance(item, dict)
+        else str(item)
+        for item in payload.get("unavailable_sources") or []
+        if item
+    }
+    available = max(0, total_sources - len(unavailable))
+    status = str(payload.get("status") or "partial")
+    return f"{available} of {total_sources} sources; {status}"
 
 
 def _empty_js_intelligence() -> dict[str, Any]:
@@ -1086,11 +1326,12 @@ def _domain_rdap(domain: str, errors: list[str], execution_log: list[dict[str, s
             ],
             "entities": _rdap_entities(entities),
         }
-        execution_log.append({"stage": "rdap", "status": "ok"})
+        execution_log.append({"stage": "rdap", "status": "registration data received"})
         return parsed
     except Exception as exc:
         errors.append(f"rdap.org domain: {exc}")
-        execution_log.append({"stage": "rdap", "status": "failed"})
+        status = "timeout" if isinstance(exc, requests.Timeout) else "failed"
+        execution_log.append({"stage": "rdap", "status": status})
         return {}
 
 
@@ -1246,6 +1487,7 @@ def _event_date(events: list[dict[str, Any]], aliases: tuple[str, ...]) -> str:
 
 def _tls_certificate(domain: str, errors: list[str], execution_log: list[dict[str, str]]) -> dict[str, Any]:
     verification_error = ""
+    last_error: Exception | None = None
     for verify in (True, False):
         try:
             context = ssl.create_default_context() if verify else ssl._create_unverified_context()
@@ -1274,14 +1516,18 @@ def _tls_certificate(domain: str, errors: list[str], execution_log: list[dict[st
                         "weak_cipher": _weak_cipher((tls_sock.cipher() or ("", "", 0))[0]),
                         "verification_error": verification_error,
                     }
-            execution_log.append({"stage": "tls", "status": "ok"})
+            execution_log.append(
+                {"stage": "tls", "status": f"certificate received; {result.get('tls_version') or 'TLS'}"}
+            )
             return result
         except Exception as exc:
+            last_error = exc
             if verify:
                 verification_error = str(exc)
                 continue
             errors.append(f"TLS certificate: {exc}")
-    execution_log.append({"stage": "tls", "status": "failed"})
+    status = "timeout" if isinstance(last_error, (TimeoutError, socket.timeout)) else "failed"
+    execution_log.append({"stage": "tls", "status": status})
     return {}
 
 

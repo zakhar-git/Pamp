@@ -7,6 +7,7 @@ import re
 import socket
 import ssl
 import time
+import traceback
 from typing import Any
 from urllib.parse import urlparse
 
@@ -66,6 +67,7 @@ def analyze_ip(
     *,
     scan_ports: bool = True,
     nmap_timeout: int = IP_NMAP_TIMEOUT,
+    debug_log: Any | None = None,
 ) -> dict[str, Any]:
     """Analyze an IP as an infrastructure target and retain legacy top-level fields."""
     started = time.monotonic()
@@ -97,7 +99,17 @@ def analyze_ip(
     proxy_signals = _proxy_signals(ip_api, tor_exit)
 
     if scan_ports and not parsed_ip.is_private:
-        port_surface = analyze_port_surface(ip, ip, timeout=nmap_timeout)
+        try:
+            port_surface = analyze_port_surface(ip, ip, timeout=nmap_timeout, debug_log=debug_log)
+        except Exception as exc:
+            reason = f"{type(exc).__name__}: {exc}"
+            errors.append(f"Port surface: {reason}")
+            if debug_log:
+                try:
+                    debug_log(f"[IP][PORT_SURFACE] {reason}\n{traceback.format_exc()}")
+                except Exception:
+                    pass
+            port_surface = _failed_port_surface(ip, reason)
     else:
         port_surface = _skipped_port_surface(ip, "Port scan disabled" if not scan_ports else "Private IP target")
     errors.extend(str(item) for item in (port_surface.get("errors") or []) if str(item).strip())
@@ -977,6 +989,13 @@ def _skipped_port_surface(ip: str, reason: str) -> dict[str, Any]:
         "duration_ms": 0,
         "errors": [],
     }
+
+
+def _failed_port_surface(ip: str, reason: str) -> dict[str, Any]:
+    result = _skipped_port_surface(ip, reason)
+    result["status"] = "failed"
+    result["errors"] = [reason]
+    return result
 
 
 def _timeline(
